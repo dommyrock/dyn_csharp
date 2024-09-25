@@ -41,6 +41,9 @@ public class BusinessRulesDefinitions
 //...
 }
 ```
+<br/>
+
+## I wanted to explore all dyn composition options to make this api as neat as possible... 
 
 The requirement for a **parameterless constructor** in this generic composition is directly related to how the `new()` constraint is used in C#. When working with generics and needing to instantiate an object of a generic type, the `new()` constraint ensures that the compiler knows the type has a parameterless constructor so that it can create an instance of the type at runtime via `new T()`.
 
