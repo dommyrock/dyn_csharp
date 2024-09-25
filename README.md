@@ -1,4 +1,4 @@
-# dyn_c# - Dynamic type allocations in c# 
+# dyn_c# - Dynamic type inference / allocations in c# 
 
 #### Use Case intro
 
@@ -173,7 +173,7 @@ public class BusinessRuleFactory : IBusinessRuleFactory
 
 This way, the DI container manages object instantiation without requiring a parameterless constructor.
 
-### Summary
+### To sum up all alternatives
 
 - The **parameterless constructor (`new()`) constraint** is required when you want to use `new T()` or `Activator.CreateInstance` in a generic context to ensure the object can be instantiated.
 - **Alternatives**:
@@ -182,4 +182,5 @@ This way, the DI container manages object instantiation without requiring a para
   - **Factory Method Pattern**: Encapsulates the instantiation logic, offering more flexibility.
   - **Dependency Injection**: Leverages DI containers to handle object creation, often avoiding the need for explicit constructors.
 
-If your objects have complex constructors or require dependencies, using a factory or DI might be the best solution. For simpler scenarios, `new()` with generics works well and is easy to implement.
+> If your objects have complex constructors or require dependencies, using a factory or DI might be the best solution. <br/>
+> For simpler scenarios, `new()` with generics works well and is easy to implement.
