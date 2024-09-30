@@ -1,5 +1,8 @@
 # dyn_c# - Dynamic type inference / allocations in c# 
 
+[Using type dynamic - msdn](https://learn.microsoft.com/en-us/dotnet/csharp/advanced-topics/interop/using-type-dynamic)
+[dyn dispatch -> Visitor pattern](https://chodounsky.com/2014/01/29/dynamic-dispatch-in-c-number/)
+
 #### Use Case intro
 
 I had a case where I wanted to have a 'marker' $${\color{orange}IBusinessRuleParameters}$$ which I could use at Runtime to infer the concrete type + params.
