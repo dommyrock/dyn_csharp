@@ -76,6 +76,37 @@ Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prm
 		.Then(x => x?.Cast<BusinessRuleResult>().FirstOrDefault(res => res.Success == false));
 ```
 
+### One issue that I encountered was that .Cast(T) couldn't infer the concrete type now so it threw Ex.
+
+```csharp
+//'Unable to cast object of type '_Error [erecruit.Config.IBusinessRuleResult]' to type'erecruit.BL.BusinessRuleResult'
+Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prms)
+=> new IBusinessRuleParams[] {
+			new IndecisivePreventionPrms
+			{
+				CandidateId = prms.Ctx.Candidate.CandidateId,
+				CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+				Start = prms.Prms.ShiftGroupKey.Start
+			},
+			new SideJobPreventionPrms
+			{
+				CandidateId = prms.Ctx.Candidate.CandidateId,
+				CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+				Start = prms.Prms.ShiftGroupKey.Start,
+				End = prms.Prms.ShiftGroupKey.End,
+			},
+			new LastMinuteActionPreventionForBookingPrms
+			{
+				CandidateId = prms.Ctx.Candidate.CandidateId,
+				CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+				Start = prms.Prms.ShiftGroupKey.Start
+			}
+	}.Select(BusinessRulesService.ExecuteSingle)
+	.Lift()
+	//Fix was to use OfType<T>
+	.Then(x => x?.OfType<BusinessRuleResult>().FirstOrDefault(res => res.Success == false));
+```
+
 
 ### Service becomes compact since we can remove type reflection code
 
