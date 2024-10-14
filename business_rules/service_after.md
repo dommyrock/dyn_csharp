@@ -6,18 +6,18 @@ We could do this because we figured that It would be Unique enough to indentify 
 This also enabled us to remove reflection from the Service code and to streamline the service layer api.
 
 ```csharp
-	[Plugin]
-	public interface IBusinessRuleHandler<TBusinessRuleParams>
-		where TBusinessRuleParams : IBusinessRuleParams
-	{
-		Maybe<IBusinessRuleResult> Handler(TBusinessRuleParams prms);
-	}
+[Plugin]
+public interface IBusinessRuleHandler<TBusinessRuleParams>
+where TBusinessRuleParams : IBusinessRuleParams
+{
+	Maybe<IBusinessRuleResult> Handler(TBusinessRuleParams prms);
+}
 ```
 
 Note: If we kept reflection solution , it would still work with few changes like this.
 ```csharp
 //change 1
-public Maybe<IBusinessRuleResult> ExecuteSingle<TBusinessRuleParams>(TBusinessRuleParams prms)
+public Maybe<IBusinessRuleResult> Handle<TBusinessRuleParams>(TBusinessRuleParams prms)
 	where TBusinessRuleParams : IBusinessRuleParams
 		=> Maybe.Unit
 			.Then(_ => Composition.Get<IBusinessRuleHandler<TBusinessRuleParams>>())
@@ -42,7 +42,7 @@ class ResolverWrapper<TBusinessRuleType, TBusinessRuleParams> : IBusinessRuleTyp
 
 //Usage Single
 Maybe<BusinessRuleResult> ValidateBusinessRules(CancelShiftBusinessRulesPrms prms)
-	=> BusinessRulesService.ExecuteSingle(
+	=> BusinessRulesService.Handle(
 				new LastMinuteActionPreventionForCancelingPrms
 				{
 					CandidateId = prms.Candidate.CandidateId,
@@ -51,29 +51,30 @@ Maybe<BusinessRuleResult> ValidateBusinessRules(CancelShiftBusinessRulesPrms prm
 
 //Usage Multiple Rule config
 Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prms)
-=> new IBusinessRuleParams[] {
-		new IndecisivePreventionPrms
-		{
-			CandidateId = prms.Ctx.Candidate.CandidateId,
-			CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
-			Start = prms.Prms.ShiftGroupKey.Start
-		},
-		new SideJobPreventionPrms
-		{
-			CandidateId = prms.Ctx.Candidate.CandidateId,
-			CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
-			Start = prms.Prms.ShiftGroupKey.Start,
-			End = prms.Prms.ShiftGroupKey.End,
-		},
-		new LastMinuteActionPreventionForBookingPrms
-		{
-			CandidateId = prms.Ctx.Candidate.CandidateId,
-			CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
-			Start = prms.Prms.ShiftGroupKey.Start
+	=> new Maybe<IBusinessRuleResult>[] {
+				BusinessRulesService.Handle(new IndecisivePreventionPrms
+				{
+					CandidateId = prms.Ctx.Candidate.CandidateId,
+					CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+					Start = prms.Prms.ShiftGroupKey.Start
+				}),
+				BusinessRulesService.Handle(new SideJobPreventionPrms
+				{
+					CandidateId = prms.Ctx.Candidate.CandidateId,
+					CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+					Start = prms.Prms.ShiftGroupKey.Start,
+					End = prms.Prms.ShiftGroupKey.End,
+				}),
+				BusinessRulesService.Handle(new LastMinuteActionPreventionForBookingPrms
+				{
+					CandidateId = prms.Ctx.Candidate.CandidateId,
+					CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
+					Start = prms.Prms.ShiftGroupKey.Start
+				})
 		}
-		}.Select(BusinessRulesService.ExecuteSingle)
-		.AsMaybe()
-		.Then(x => x?.Cast<BusinessRuleResult>().FirstOrDefault(res => res.Success == false));
+.Lift()
+.Then(x => x.Cast<BusinessRuleResult>())
+.Then(x => x.FirstOrDefault(res => res.Success == false));
 ```
 
 ### One issue that I encountered was that .Cast(T) couldn't infer the concrete type now so it threw Ex.
@@ -101,10 +102,12 @@ Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prm
 				CompanyId = prms.Prms.ShiftGroupKey.CompanyId,
 				Start = prms.Prms.ShiftGroupKey.Start
 			}
-	}.Select(BusinessRulesService.ExecuteSingle)
+	}.Select(BusinessRulesService.Handle) // Because here we still didn't know exact Type at the compile time ('x' was IBusinessRuleParams)
 	.Lift()
 	//Fix was to use OfType<T>
 	.Then(x => x?.OfType<BusinessRuleResult>().FirstOrDefault(res => res.Success == false));
+
+	//NOTE THIS Still would'nt work because DI would try to look for 'Handle' on IBusinessRuleParams (instead of in the service, when composed like the above Example)
 ```
 
 
@@ -114,14 +117,13 @@ Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prm
 	[Export, TransactionScoped]
 	public class BusinessRulesService : IBusinessRulesService
 	{
-		[Import] public ICompositionRoot Composition { get; set; }
-		[Import] public ILog Log { get; set; }
+		[Import] public System.Func<ICompositionRoot> Composition { get; set; }
 
 		/// <inheritdoc/>
-		public Maybe<IBusinessRuleResult> ExecuteSingle<TBusinessRuleParams>(TBusinessRuleParams prms)
+		public Maybe<IBusinessRuleResult> Handle<TBusinessRuleParams>(TBusinessRuleParams prms)
 			where TBusinessRuleParams : IBusinessRuleParams
 				=> Maybe.Unit
-					.Then(_ => Composition.Get<IBusinessRuleHandler<TBusinessRuleParams>>())
+					.Then(_ => Composition().Get<IBusinessRuleHandler<TBusinessRuleParams>>())
 					.Then(x => x.Handler(prms));
 	}
 
@@ -140,3 +142,55 @@ Maybe<BusinessRuleResult> ValidateAllActiveBusinessRules(BlockingLogicParams prm
 		public int ErrorCode { get; set; }
 	}
 ````
+
+### Handler Implementation example 
+```csharp,ignore
+	[Export, TransactionScoped]
+	public class IndecisivePrevention : IBusinessRuleHandler<IndecisivePreventionPrms>
+	{
+		public Maybe<IBusinessRuleResult> Handler(IndecisivePreventionPrms prms)
+		{/**/}
+	}
+	[Export, TransactionScoped]
+	public class LastMinuteActionPreventionForBooking : IBusinessRuleHandler<LastMinuteActionPreventionForBookingPrms>
+	{
+		public Maybe<IBusinessRuleResult> Handler(LastMinuteActionPreventionForBookingPrms prms)
+		{/**/}
+	}
+	[Export, TransactionScoped]
+	public class LastMinuteActionPreventionForCanceling : IBusinessRuleHandler<LastMinuteActionPreventionForCancelingPrms>
+	{
+		public Maybe<IBusinessRuleResult> Handler(LastMinuteActionPreventionForCancelingPrms prms)
+		{/**/}
+	}
+
+	[Export, TransactionScoped]
+	public class LastMinuteActionPreventionForCanceling : IBusinessRuleHandler<LastMinuteActionPreventionForCancelingPrms>
+	{
+		[Import] public IBusinessRuleConfigProvider BusinessRuleConfigProvider { get; set; }
+
+		public Maybe<IBusinessRuleResult> Handler(LastMinuteActionPreventionForCancelingPrms prms)
+		{
+			var cancelingSideJobPreventionRules = BusinessRuleConfigProvider
+				.GetBusinessRules<RuleDef.LastMinuteActionPreventionForCanceling>(AboutTypes.Shift)
+				.Where(r => r.Enforce.HasValue && r.Enforce == true)
+				.ToList();
+				var messages="";
+				//...speciffic implementation
+
+			if (!string.IsNullOrEmpty(messages))
+			{
+				IBusinessRuleResult fail = new BusinessRuleResult
+				{
+					Success = false,
+					Message = messages,
+					ErrorCode = 403,
+					FailureReason = "business_rule"
+				};
+				return fail.AsMaybe();
+			}
+			return Maybe.Nothing<IBusinessRuleResult>();
+		}
+	}
+
+```
